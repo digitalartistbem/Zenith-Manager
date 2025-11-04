@@ -1,12 +1,8 @@
 
-// FIX: Import `useEffect` from React to resolve `Cannot find name 'useEffect'` errors.
 import React, { useState, useMemo, useEffect } from 'react';
-// FIX: Add .tsx extension to import to resolve module error.
-import { useAppData } from '../hooks/useAppData.tsx';
-// FIX: Add .ts extension to import to resolve module error.
-import { Transaction, TransactionType, Account, AccountIcon, IncomeCategory, ExpenseCategory } from '../types.ts';
-// FIX: Add .tsx extension to import to resolve module error.
-import { PlusIcon, TrashIcon, BankIcon, CashIcon, WalletIcon } from './Icons.tsx';
+import { useAppData } from '../hooks/useAppData';
+import { Transaction, TransactionType, Account, AccountIcon, IncomeCategory, ExpenseCategory } from '../types';
+import { PlusIcon, TrashIcon, BankIcon, CashIcon, WalletIcon } from './Icons';
 
 const AccountIcons: Record<AccountIcon, React.ReactNode> = {
     bank: <BankIcon className="w-6 h-6" />,

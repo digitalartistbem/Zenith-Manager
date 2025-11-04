@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { useAppData } from '../hooks/useAppData.tsx';
-import { Mood } from '../types.ts';
-import { getInspirationalContent } from '../services/geminiService.ts';
+import { useAppData } from '../hooks/useAppData';
+import { Mood } from '../types';
+import { getInspirationalContent } from '../services/geminiService';
 
 const moodOptions: { mood: Mood; emoji: string; color: string }[] = [
     { mood: 'happy', emoji: '😊', color: 'text-yellow-400' },

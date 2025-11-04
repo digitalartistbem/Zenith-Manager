@@ -1,8 +1,8 @@
 
 import React, { useState } from 'react';
-import { useAppData } from '../hooks/useAppData.tsx';
-import { JournalEntry } from '../types.ts';
-import { PlusIcon, TrashIcon } from './Icons.tsx';
+import { useAppData } from '../hooks/useAppData';
+import { JournalEntry } from '../types';
+import { PlusIcon, TrashIcon } from './Icons';
 
 const JournalEditor: React.FC<{ entry?: JournalEntry; onDone: () => void }> = ({ entry, onDone }) => {
     const { addJournalEntry, updateJournalEntry } = useAppData();

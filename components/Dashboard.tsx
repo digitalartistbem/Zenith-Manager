@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
-import { useAppData } from '../hooks/useAppData.tsx';
-import { getInspirationalContent } from '../services/geminiService.ts';
+import { useAppData } from '../hooks/useAppData';
+import { getInspirationalContent } from '../services/geminiService';
 
 const InspirationalContent: React.FC = () => {
     const [content, setContent] = useState('');

@@ -1,6 +1,7 @@
+
 import React, { useState, useMemo } from 'react';
-import { useAppData } from '../hooks/useAppData.tsx';
-import { Project, Task } from '../types.ts';
+import { useAppData } from '../hooks/useAppData';
+import { Project, Task } from '../types';
 
 type CalendarViewMode = 'month' | 'week' | 'day';
 
