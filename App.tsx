@@ -1,14 +1,14 @@
 
 import React, { useState } from 'react';
-import { Sidebar } from './components/Sidebar';
-import { Dashboard } from './components/Dashboard';
-import { Budget } from './components/Budget';
-import { Projects } from './components/Projects';
-import { CalendarView } from './components/CalendarView';
-import { Contacts } from './components/Contacts';
-import { Wellbeing } from './components/Wellbeing';
-import { Journals } from './components/Journals';
-import { AppDataProvider } from './hooks/useAppData';
+import { Sidebar } from './components/Sidebar.tsx';
+import { Dashboard } from './components/Dashboard.tsx';
+import { Budget } from './components/Budget.tsx';
+import { Projects } from './components/Projects.tsx';
+import { CalendarView } from './components/CalendarView.tsx';
+import { Contacts } from './components/Contacts.tsx';
+import { Wellbeing } from './components/Wellbeing.tsx';
+import { Journals } from './components/Journals.tsx';
+import { AppDataProvider } from './hooks/useAppData.tsx';
 
 export type View = 'dashboard' | 'budget' | 'projects' | 'calendar' | 'contacts' | 'wellbeing' | 'journals';
 

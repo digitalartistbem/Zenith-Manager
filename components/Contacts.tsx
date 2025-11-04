@@ -1,8 +1,7 @@
-
 import React, { useState, useMemo } from 'react';
-import { useAppData } from '../hooks/useAppData';
-import { Contact, Category } from '../types';
-import { PlusIcon, PencilIcon, TrashIcon } from './Icons';
+import { useAppData } from '../hooks/useAppData.tsx';
+import { Contact, Category } from '../types.ts';
+import { PlusIcon, PencilIcon, TrashIcon } from './Icons.tsx';
 
 // Category Manager Component
 const CategoryManager: React.FC<{type: 'contact'}> = ({ type }) => {

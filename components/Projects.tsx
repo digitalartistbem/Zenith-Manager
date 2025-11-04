@@ -1,8 +1,7 @@
-
 import React, { useState, useMemo } from 'react';
-import { useAppData } from '../hooks/useAppData';
-import { Project, Task, TaskStatus, Category } from '../types';
-import { PlusIcon, TrashIcon, PencilIcon } from './Icons';
+import { useAppData } from '../hooks/useAppData.tsx';
+import { Project, Task, TaskStatus, Category } from '../types.ts';
+import { PlusIcon, TrashIcon, PencilIcon } from './Icons.tsx';
 
 // Category Manager Component
 const CategoryManager: React.FC<{type: 'project'}> = ({ type }) => {

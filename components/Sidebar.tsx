@@ -1,8 +1,7 @@
-
 import React, { useRef } from 'react';
-import { View } from '../App';
-import { useAppData } from '../hooks/useAppData';
-import { DownloadIcon, UploadIcon } from './Icons';
+import { View } from '../App.tsx';
+import { useAppData } from '../hooks/useAppData.tsx';
+import { DownloadIcon, UploadIcon } from './Icons.tsx';
 
 interface SidebarProps {
     currentView: View;

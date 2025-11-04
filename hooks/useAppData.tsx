@@ -1,6 +1,5 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode, useReducer } from 'react';
-import { AppData, Account, Transaction, Project, Task, Contact, MoodLog, JournalEntry, Category, TaskStatus } from '../types';
+import { AppData, Account, Transaction, Project, Task, Contact, MoodLog, JournalEntry, Category, TaskStatus } from '../types.ts';
 
 // Default data for first-time users
 const initialData: AppData = {
@@ -145,17 +144,23 @@ const appReducer = (state: AppData, action: Action): AppData => {
     }
 };
 
+
+// FIX: Add missing function signatures to the context type to resolve errors in consuming components.
 interface AppDataContextType {
   data: AppData;
   dispatch: React.Dispatch<Action>;
   handleBackup: () => void;
   handleRestore: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  // Accounts
   addAccount: (account: Omit<Account, 'id'>) => void;
   deleteAccount: (accountId: string) => void;
+  // Transactions
   addTransaction: (transaction: Omit<Transaction, 'id'>) => void;
+  // Journals
   addJournalEntry: (entry: Omit<JournalEntry, 'id'>) => void;
   updateJournalEntry: (entry: JournalEntry) => void;
   deleteJournalEntry: (entryId: string) => void;
+  // Mood
   addMoodLog: (mood: Omit<MoodLog, 'id'>) => void;
 }
 
@@ -211,6 +216,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   };
 
+  // FIX: Implement helper functions that dispatch actions to abstract the logic from components.
   const addAccount = (account: Omit<Account, 'id'>) => dispatch({ type: 'ADD_ACCOUNT', payload: account });
   const deleteAccount = (accountId: string) => dispatch({ type: 'DELETE_ACCOUNT', payload: accountId });
   const addTransaction = (transaction: Omit<Transaction, 'id'>) => dispatch({ type: 'ADD_TRANSACTION', payload: transaction });
@@ -219,6 +225,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
   const deleteJournalEntry = (entryId: string) => dispatch({ type: 'DELETE_JOURNAL', payload: entryId });
   const addMoodLog = (mood: Omit<MoodLog, 'id'>) => dispatch({ type: 'ADD_MOOD', payload: mood });
 
+  // FIX: Provide the new helper functions in the context value so they can be accessed via the useAppData hook.
   const value = { 
       data, 
       dispatch, 
