@@ -1,8 +1,8 @@
 const CACHE_NAME = 'zenith-life-manager-v2';
 const URLS_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/index.tsx',
+  './',
+  './index.html',
+  './index.tsx',
   'https://cdn.tailwindcss.com',
   'https://rsms.me/inter/inter.css'
 ];

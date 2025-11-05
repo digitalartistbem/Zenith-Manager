@@ -4,12 +4,12 @@
   "description": "An all-in-one planner to manage your budget, projects, calendar, contacts, and daily tasks, with inspirational content to keep you motivated.",
   "icons": [
     {
-      "src": "/vite.svg",
+      "src": "./vite.svg",
       "sizes": "192x192",
       "type": "image/svg+xml"
     },
     {
-      "src": "/vite.svg",
+      "src": "./vite.svg",
       "sizes": "512x512",
       "type": "image/svg+xml"
     }
