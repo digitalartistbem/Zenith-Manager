@@ -43,8 +43,1436 @@
 </head>
   <body class="bg-background text-text">
     <div id="root"></div>
-    <!-- Changed type to "text/babel" and added presets for React/TypeScript -->
-    <script type="text/babel" data-presets="react,typescript" data-type="module" src="./index.tsx"></script>
+    <!-- 
+      All application code is bundled into this single script tag.
+      Babel will transpile the entire block at once.
+    -->
+    <script type="text/babel" data-presets="react,typescript" data-type="module">
+// --- From services/geminiService.ts ---
+import { GoogleGenAI } from "@google/genai";
+
+const API_KEY_FROM_ENV = (typeof process !== 'undefined' && process.env && process.env.API_KEY)
+    ? process.env.API_KEY
+    : undefined;
+
+let ai = null;
+if (API_KEY_FROM_ENV) {
+    ai = new GoogleGenAI({ apiKey: API_KEY_FROM_ENV });
+} else {
+    console.warn("API_KEY not found. Inspirational content will use fallback data.");
+}
+
+const getInspirationalContent = async (type) => {
+  const prompt = type === 'quote'
+    ? 'Generate a single, short, uplifting and elegant motivational quote for a woman.'
+    : 'Generate a single, inspirational Bible verse, including the book, chapter, and verse number (e.g., Philippians 4:13).';
+  
+  if (!ai) {
+    console.error(`Gemini API not initialized. Using fallback for inspirational ${type}.`);
+    if (type === 'quote') {
+        return "The most beautiful thing you can wear is confidence. - Blake Lively";
+    } else {
+        return "For I know the plans I have for you, declares the Lord, plans for welfare and not for evil, to give you a future and a hope. - Jeremiah 29:11";
+    }
+  }
+
+  try {
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt
+    });
+    return response.text;
+  } catch (error) {
+    console.error(`Error fetching inspirational ${type}:`, error);
+    if (type === 'quote') {
+        return "The most beautiful thing you can wear is confidence. - Blake Lively";
+    } else {
+        return "For I know the plans I have for you, declares the Lord, plans for welfare and not for evil, to give you a future and a hope. - Jeremiah 29:11";
+    }
+  }
+};
+
+// --- From hooks/useAppData.tsx ---
+const { createContext, useContext, useReducer, useEffect } = React;
+
+const initialData = {
+  accounts: [],
+  transactions: [],
+  projects: [
+    { 
+      id: 'proj-1', 
+      name: 'Plan vacation', 
+      deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), 
+      isCompleted: false,
+      tasks: [
+          {id: 'task-1', text: 'Book flights', status: 'todo'},
+          {id: 'task-2', text: 'Reserve hotel', status: 'todo'},
+      ] 
+    },
+  ],
+  contacts: [],
+  categories: [],
+  moodLogs: [],
+  journalEntries: [],
+};
+
+const appReducer = (state, action) => {
+    switch (action.type) {
+        case 'SET_DATA':
+            return action.payload;
+        case 'ADD_ACCOUNT':
+            return { ...state, accounts: [...state.accounts, { ...action.payload, id: crypto.randomUUID() }] };
+        case 'DELETE_ACCOUNT':
+            return {
+                ...state,
+                accounts: state.accounts.filter(a => a.id !== action.payload),
+                transactions: state.transactions.filter(t => t.accountId !== action.payload),
+            };
+        case 'ADD_TRANSACTION':
+            return { ...state, transactions: [...state.transactions, { ...action.payload, id: crypto.randomUUID() }] };
+        case 'ADD_JOURNAL':
+            return { ...state, journalEntries: [...state.journalEntries, { ...action.payload, id: crypto.randomUUID() }] };
+        case 'UPDATE_JOURNAL':
+            return { ...state, journalEntries: state.journalEntries.map(j => j.id === action.payload.id ? action.payload : j) };
+        case 'DELETE_JOURNAL':
+            return { ...state, journalEntries: state.journalEntries.filter(j => j.id !== action.payload) };
+        case 'ADD_MOOD':
+            return { ...state, moodLogs: [...state.moodLogs, { ...action.payload, id: crypto.randomUUID() }] };
+        case 'ADD_CATEGORY':
+            return { ...state, categories: [...state.categories, { ...action.payload, id: crypto.randomUUID() }] };
+        case 'DELETE_CATEGORY': {
+            const category = state.categories.find(c => c.id === action.payload);
+            if (!category) return state;
+            const projects = category.type === 'project' ? state.projects.map(p => p.categoryId === action.payload ? { ...p, categoryId: undefined } : p) : state.projects;
+            const contacts = category.type === 'contact' ? state.contacts.map(c => c.categoryId === action.payload ? { ...c, categoryId: undefined } : c) : state.contacts;
+            return {
+                ...state,
+                categories: state.categories.filter(c => c.id !== action.payload),
+                projects,
+                contacts,
+            };
+        }
+        case 'ADD_PROJECT':
+            return { ...state, projects: [...state.projects, { ...action.payload, id: crypto.randomUUID() }] };
+        case 'UPDATE_PROJECT':
+            return { ...state, projects: state.projects.map(p => p.id === action.payload.id ? action.payload : p) };
+        case 'DELETE_PROJECT':
+            return { ...state, projects: state.projects.filter(p => p.id !== action.payload) };
+        case 'ADD_TASK': {
+            const newProjects = state.projects.map(p => {
+                if (p.id === action.payload.projectId) {
+                    return { ...p, tasks: [...p.tasks, { ...action.payload.task, id: crypto.randomUUID() }] };
+                }
+                return p;
+            });
+            return { ...state, projects: newProjects };
+        }
+        case 'UPDATE_TASK': {
+            const newProjects = state.projects.map(p => {
+                if (p.id === action.payload.projectId) {
+                    return { ...p, tasks: p.tasks.map(t => t.id === action.payload.task.id ? action.payload.task : t) };
+                }
+                return p;
+            });
+            return { ...state, projects: newProjects };
+        }
+        case 'DELETE_TASK': {
+            const newProjects = state.projects.map(p => {
+                if (p.id === action.payload.projectId) {
+                    return { ...p, tasks: p.tasks.filter(t => t.id !== action.payload.taskId) };
+                }
+                return p;
+            });
+            return { ...state, projects: newProjects };
+        }
+        case 'UPDATE_TASK_STATUS': {
+            const newProjects = state.projects.map(p => {
+                if (p.id === action.payload.projectId) {
+                    const newTasks = p.tasks.map(t => t.id === action.payload.taskId ? {...t, status: action.payload.status} : t);
+                    return { ...p, tasks: newTasks };
+                }
+                return p;
+            });
+            return { ...state, projects: newProjects };
+        }
+        case 'ADD_CONTACT':
+            return { ...state, contacts: [...state.contacts, { ...action.payload, id: crypto.randomUUID() }] };
+        case 'UPDATE_CONTACT':
+            return { ...state, contacts: state.contacts.map(c => c.id === action.payload.id ? action.payload : c) };
+        case 'DELETE_CONTACT':
+            return { ...state, contacts: state.contacts.filter(c => c.id !== action.payload) };
+        default:
+            return state;
+    }
+};
+
+const AppDataContext = createContext(undefined);
+
+const AppDataProvider = ({ children }) => {
+  const [data, dispatch] = useReducer(appReducer, initialData, (initial) => {
+    try {
+      const storedData = localStorage.getItem('zenith-app-data');
+      return storedData ? JSON.parse(storedData) : initial;
+    } catch (error) {
+      console.error("Could not parse localStorage data:", error);
+      return initial;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('zenith-app-data', JSON.stringify(data));
+    } catch (error) {
+      console.error("Could not save to localStorage:", error);
+    }
+  }, [data]);
+
+  const handleBackup = () => {
+    const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(data))}`;
+    const link = document.createElement("a");
+    link.href = jsonString;
+    link.download = `zenith-backup-${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+  };
+
+  const handleRestore = (event) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const text = e.target?.result;
+          if (typeof text === 'string') {
+            const restoredData = JSON.parse(text);
+            dispatch({ type: 'SET_DATA', payload: restoredData });
+            alert("Data restored successfully!");
+          }
+        } catch (error) {
+          console.error("Failed to parse restore file", error);
+          alert("Failed to restore data. The file might be corrupted.");
+        }
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  const addAccount = (account) => dispatch({ type: 'ADD_ACCOUNT', payload: account });
+  const deleteAccount = (accountId) => dispatch({ type: 'DELETE_ACCOUNT', payload: accountId });
+  const addTransaction = (transaction) => dispatch({ type: 'ADD_TRANSACTION', payload: transaction });
+  const addJournalEntry = (entry) => dispatch({ type: 'ADD_JOURNAL', payload: entry });
+  const updateJournalEntry = (entry) => dispatch({ type: 'UPDATE_JOURNAL', payload: entry });
+  const deleteJournalEntry = (entryId) => dispatch({ type: 'DELETE_JOURNAL', payload: entryId });
+  const addMoodLog = (mood) => dispatch({ type: 'ADD_MOOD', payload: mood });
+
+  const value = { 
+      data, 
+      dispatch, 
+      handleBackup, 
+      handleRestore,
+      addAccount,
+      deleteAccount,
+      addTransaction,
+      addJournalEntry,
+      updateJournalEntry,
+      deleteJournalEntry,
+      addMoodLog,
+  };
+
+  return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
+};
+
+const useAppData = () => {
+  const context = useContext(AppDataContext);
+  if (context === undefined) {
+    throw new Error('useAppData must be used within an AppDataProvider');
+  }
+  return context;
+};
+
+// --- From components/Icons.tsx ---
+const PlusIcon = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+    </svg>
+);
+const TrashIcon = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+    </svg>
+);
+const BankIcon = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2h8a2 2 0 002-2v-1a2 2 0 012-2h1.945M12 4v7m0 0l-3-3m3 3l3-3m-3-3a9 9 0 110 18 9 9 0 010-18z" />
+    </svg>
+);
+const CashIcon = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+    </svg>
+);
+const WalletIcon = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+    </svg>
+);
+const DownloadIcon = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+    </svg>
+);
+const UploadIcon = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l4 4m0 0l-4 4m4-4H4" />
+    </svg>
+);
+const PencilIcon = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z" />
+    </svg>
+);
+
+// --- From components/Sidebar.tsx ---
+const { useRef } = React;
+const Sidebar = ({ currentView, setCurrentView }) => {
+    const { handleBackup, handleRestore } = useAppData();
+    const fileInputRef = useRef(null);
+
+    const navItems = [
+        { view: 'dashboard', label: 'Dashboard' },
+        { view: 'budget', label: 'Budget' },
+        { view: 'projects', label: 'Projects' },
+        { view: 'calendar', label: 'Calendar' },
+        { view: 'contacts', label: 'Contacts' },
+        { view: 'wellbeing', label: 'Wellbeing' },
+        { view: 'journals', label: 'Journals' },
+    ];
+
+    const onRestoreClick = () => {
+        fileInputRef.current?.click();
+    };
+    
+    return (
+        <aside className="w-64 bg-surface p-4 flex-shrink-0 hidden md:block flex flex-col">
+            <div>
+                <h1 className="text-2xl font-bold text-primary mb-8">Zenith</h1>
+                <nav>
+                    <ul>
+                        {navItems.map(({ view, label }) => (
+                            <li key={view}>
+                                <button
+                                    onClick={() => setCurrentView(view)}
+                                    className={`w-full text-left px-4 py-2 rounded-md my-1 transition-colors ${
+                                        currentView === view
+                                            ? 'bg-primary text-white font-semibold'
+                                            : 'hover:bg-background'
+                                    }`}
+                                >
+                                    {label}
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                </nav>
+            </div>
+            <div className="mt-auto space-y-2">
+                 <button onClick={handleBackup} className="w-full flex items-center justify-center text-left px-4 py-2 rounded-md my-1 transition-colors bg-gray-700 hover:bg-gray-600">
+                    <DownloadIcon className="w-5 h-5 mr-2" /> Backup Data
+                 </button>
+                 <button onClick={onRestoreClick} className="w-full flex items-center justify-center text-left px-4 py-2 rounded-md my-1 transition-colors bg-gray-700 hover:bg-gray-600">
+                    <UploadIcon className="w-5 h-5 mr-2" /> Restore Data
+                 </button>
+                 <input type="file" ref={fileInputRef} onChange={handleRestore} accept=".json" className="hidden"/>
+            </div>
+        </aside>
+    );
+};
+
+
+// --- From components/Dashboard.tsx ---
+const { useState, useEffect: useEffectDash, useMemo: useMemoDash } = React;
+const InspirationalContent = () => {
+    const [content, setContent] = useState('');
+    const [type, setType] = useState('quote');
+    const [loading, setLoading] = useState(true);
+
+    const fetchContent = async (contentType) => {
+        setLoading(true);
+        try {
+            const result = await getInspirationalContent(contentType);
+            setContent(result);
+        } catch (error) {
+            console.error('Failed to fetch content:', error);
+            setContent('Could not load content. Please try again later.');
+        } finally {
+            setLoading(false);
+        }
+    };
+    
+    useEffectDash(() => {
+        fetchContent(type);
+    }, [type]);
+
+    return (
+        <div className="bg-surface p-6 rounded-xl">
+            <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold">Daily Inspiration</h3>
+                <div className="flex space-x-2">
+                    <button onClick={() => setType('quote')} className={`px-3 py-1 text-sm rounded-md ${type === 'quote' ? 'bg-primary text-white' : 'bg-background'}`}>Quote</button>
+                    <button onClick={() => setType('verse')} className={`px-3 py-1 text-sm rounded-md ${type === 'verse' ? 'bg-primary text-white' : 'bg-background'}`}>Verse</button>
+                </div>
+            </div>
+            {loading ? <p className="text-text-secondary">Loading...</p> : <p className="text-lg italic text-center text-text-primary">"{content}"</p>}
+        </div>
+    );
+};
+const Dashboard = () => {
+    const { data } = useAppData();
+    const upcomingDeadlines = useMemoDash(() => {
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        return data.projects
+            .filter(p => !p.isCompleted && new Date(p.deadline) >= today)
+            .sort((a,b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())
+            .slice(0, 3);
+    }, [data.projects]);
+    const recentTransactions = useMemoDash(() => {
+        return [...data.transactions]
+            .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            .slice(0, 5);
+    }, [data.transactions]);
+    const todaysTasks = useMemoDash(() => {
+        const todayString = new Date().toISOString().split('T')[0];
+        return data.projects.flatMap(p => 
+            p.tasks
+                .filter(t => t.deadline === todayString && t.status !== 'done')
+                .map(t => ({...t, projectName: p.name}))
+        );
+    }, [data.projects]);
+    return (
+        <div className="space-y-8">
+            <h1 className="text-4xl font-bold">Welcome Back!</h1>
+            <InspirationalContent />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="bg-surface p-6 rounded-xl">
+                    <h3 className="text-xl font-bold mb-4">Today's Tasks</h3>
+                    <ul className="space-y-2">
+                        {todaysTasks.length > 0 ? todaysTasks.map(task => (
+                           <li key={task.id} className="bg-background p-3 rounded-md">
+                            <p>{task.text}</p>
+                            <p className="text-xs text-text-secondary">{task.projectName}</p>
+                           </li>
+                        )) : <p className="text-text-secondary">No tasks due today. Enjoy your day!</p>}
+                    </ul>
+                </div>
+                <div className="bg-surface p-6 rounded-xl">
+                    <h3 className="text-xl font-bold mb-4">Upcoming Deadlines</h3>
+                     <ul className="space-y-2">
+                        {upcomingDeadlines.length > 0 ? upcomingDeadlines.map(p => (
+                           <li key={p.id} className="bg-background p-3 rounded-md flex justify-between">
+                               <span>{p.name}</span>
+                               <span className="text-text-secondary">{new Date(p.deadline).toLocaleDateString()}</span>
+                           </li>
+                        )) : <p className="text-text-secondary">No upcoming deadlines.</p>}
+                    </ul>
+                </div>
+                 <div className="bg-surface p-6 rounded-xl">
+                    <h3 className="text-xl font-bold mb-4">Recent Transactions</h3>
+                    <ul className="space-y-2">
+                        {recentTransactions.length > 0 ? recentTransactions.map(t => (
+                            <li key={t.id} className="bg-background p-3 rounded-md flex justify-between">
+                                <span>{t.description}</span>
+                                <span className={t.type === 'income' ? 'text-green-400' : 'text-red-400'}>
+                                    {t.type === 'income' ? '+' : '-'}₱{t.amount.toFixed(2)}
+                                </span>
+                            </li>
+                        )) : <p className="text-text-secondary">No recent transactions.</p>}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- From components/Budget.tsx ---
+const { useState: useStateBudget, useMemo: useMemoBudget, useEffect: useEffectBudget } = React;
+const AccountIcons = {
+    bank: <BankIcon className="w-6 h-6" />,
+    cash: <CashIcon className="w-6 h-6" />,
+    wallet: <WalletIcon className="w-6 h-6" />,
+};
+const AccountManager = () => {
+    const { data, addAccount, deleteAccount } = useAppData();
+    const [name, setName] = useStateBudget('');
+    const [initialBalance, setInitialBalance] = useStateBudget('');
+    const [icon, setIcon] = useStateBudget('wallet');
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        if (name && initialBalance) {
+            addAccount({ name, icon, initialBalance: parseFloat(initialBalance) });
+            setName('');
+            setInitialBalance('');
+        }
+    };
+    return (
+        <div className="bg-surface p-6 rounded-xl">
+            <h3 className="text-xl font-bold mb-4">Manage Accounts</h3>
+            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end mb-6">
+                <input type="text" placeholder="Account Name" value={name} onChange={e => setName(e.target.value)} required className="bg-background border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"/>
+                <input type="number" placeholder="Initial Balance" value={initialBalance} onChange={e => setInitialBalance(e.target.value)} required className="bg-background border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"/>
+                <select value={icon} onChange={e => setIcon(e.target.value)} className="bg-background border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">
+                    <option value="wallet">Wallet</option>
+                    <option value="bank">Bank</option>
+                    <option value="cash">Cash</option>
+                </select>
+                <button type="submit" className="flex justify-center items-center bg-primary text-white px-4 py-2 rounded-md hover:bg-pink-500 transition-colors font-semibold">
+                    <PlusIcon className="w-5 h-5 mr-2" /> Add
+                </button>
+            </form>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {data.accounts.map(acc => (
+                     <div key={acc.id} className="bg-background p-4 rounded-lg flex justify-between items-center">
+                        <div className="flex items-center space-x-3">
+                            <span className="text-primary">{AccountIcons[acc.icon]}</span>
+                            <span className="font-semibold">{acc.name}</span>
+                        </div>
+                        <button onClick={() => deleteAccount(acc.id)} className="text-text-secondary hover:text-secondary"><TrashIcon className="w-5 h-5"/></button>
+                     </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+const TransactionForm = () => {
+    const { data, addTransaction } = useAppData();
+    const [description, setDescription] = useStateBudget('');
+    const [amount, setAmount] = useStateBudget('');
+    const [type, setType] = useStateBudget('expense');
+    const [category, setCategory] = useStateBudget('personal');
+    const [accountId, setAccountId] = useStateBudget('');
+
+    useEffectBudget(() => {
+        if(data.accounts.length > 0 && !accountId) {
+            setAccountId(data.accounts[0].id);
+        }
+    }, [data.accounts, accountId]);
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        if (description && amount && accountId) {
+            addTransaction({
+                description,
+                amount: parseFloat(amount),
+                type,
+                category,
+                accountId,
+                date: new Date().toISOString()
+            });
+            setDescription('');
+            setAmount('');
+            setType('expense');
+            setCategory('personal');
+        } else if (!accountId && data.accounts.length > 0) {
+            alert('Please select an account.');
+        } else if (data.accounts.length === 0) {
+            alert('Please create an account first.');
+        }
+    };
+    return (
+        <form onSubmit={handleSubmit} className="bg-surface p-6 rounded-xl space-y-4">
+            <h3 className="text-xl font-bold">Add Transaction</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                <input type="text" placeholder="Description" value={description} onChange={e => setDescription(e.target.value)} required className="bg-background border border-gray-600 rounded-md px-3 py-2"/>
+                <input type="number" placeholder="Amount" value={amount} onChange={e => setAmount(e.target.value)} required className="bg-background border border-gray-600 rounded-md px-3 py-2"/>
+                <select value={type} onChange={e => { setType(e.target.value); setCategory(e.target.value === 'income' ? 'salary' : 'personal');}} className="bg-background border border-gray-600 rounded-md px-3 py-2">
+                    <option value="expense">Expense</option>
+                    <option value="income">Income</option>
+                </select>
+                <select value={category} onChange={e => setCategory(e.target.value)} className="bg-background border border-gray-600 rounded-md px-3 py-2">
+                    {type === 'income' ? <>
+                        <option value="salary">Salary</option>
+                        <option value="business">Business Income</option>
+                        <option value="gifts">Gifts</option>
+                    </> : <>
+                        <option value="personal">Personal</option>
+                        <option value="bills">Bills</option>
+                        <option value="business">Business</option>
+                    </>}
+                </select>
+                <select value={accountId} onChange={e => setAccountId(e.target.value)} required className="bg-background border border-gray-600 rounded-md px-3 py-2">
+                    <option value="" disabled>Select Account</option>
+                    {data.accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
+                </select>
+            </div>
+             <button type="submit" className="w-full flex justify-center items-center bg-primary text-white px-4 py-2 rounded-md hover:bg-pink-500 transition-colors font-semibold">
+                <PlusIcon className="w-5 h-5 mr-2" /> Add
+            </button>
+        </form>
+    );
+};
+const Budget = () => {
+    const { data } = useAppData();
+    const [selectedAccountId, setSelectedAccountId] = useStateBudget('all');
+    
+    useEffectBudget(() => {
+        if(data.accounts.length > 0 && selectedAccountId === 'all') {}
+    }, [data.accounts, selectedAccountId]);
+
+    const { balance, totalIncome, totalExpenses } = useMemoBudget(() => {
+        const account = data.accounts.find(a => a.id === selectedAccountId);
+        const transactions = selectedAccountId === 'all' 
+            ? data.transactions 
+            : data.transactions.filter(t => t.accountId === selectedAccountId);
+        const initial = selectedAccountId === 'all'
+            ? data.accounts.reduce((sum, acc) => sum + acc.initialBalance, 0)
+            : account?.initialBalance || 0;
+        const income = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+        const expenses = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+        return { balance: initial + income - expenses, totalIncome: income, totalExpenses: expenses };
+    }, [data, selectedAccountId]);
+    
+    const transactionsToShow = (selectedAccountId === 'all' 
+            ? data.transactions 
+            : data.transactions.filter(t => t.accountId === selectedAccountId))
+            .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    return (
+        <div className="space-y-8">
+            <h1 className="text-4xl font-bold">Budget Manager</h1>
+            <AccountManager />
+            <TransactionForm />
+            <div className="bg-surface rounded-xl p-6">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-xl font-bold">Account Overview</h3>
+                     <select value={selectedAccountId} onChange={e => setSelectedAccountId(e.target.value)} className="bg-background border border-gray-600 rounded-md px-3 py-2">
+                        <option value="all">All Accounts</option>
+                        {data.accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
+                    </select>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <div className="bg-background rounded-xl p-6 text-center">
+                        <h4 className="text-lg text-green-400 font-semibold">Income</h4>
+                        <p className="text-3xl font-bold">₱{totalIncome.toFixed(2)}</p>
+                    </div>
+                    <div className="bg-background rounded-xl p-6 text-center">
+                        <h4 className="text-lg text-red-400 font-semibold">Expenses</h4>
+                        <p className="text-3xl font-bold">₱{totalExpenses.toFixed(2)}</p>
+                    </div>
+                    <div className="bg-background rounded-xl p-6 text-center">
+                        <h4 className={`text-lg font-semibold ${balance >= 0 ? 'text-blue-400' : 'text-yellow-400'}`}>Current Balance</h4>
+                        <p className="text-3xl font-bold">₱{balance.toFixed(2)}</p>
+                    </div>
+                </div>
+                 <h3 className="text-xl font-bold mb-4">Transaction History</h3>
+                 <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                        <thead className="border-b border-gray-600">
+                            <tr>
+                                <th className="p-3">Date</th>
+                                <th className="p-3">Description</th>
+                                <th className="p-3">Category</th>
+                                <th className="p-3 text-right">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {transactionsToShow.map(t => (
+                                <tr key={t.id} className="border-b border-gray-700">
+                                    <td className="p-3 text-text-secondary">{new Date(t.date).toLocaleDateString()}</td>
+                                    <td className="p-3">{t.description}</td>
+                                    <td className="p-3 capitalize">{t.category}</td>
+                                    <td className={`p-3 text-right font-semibold ${t.type === 'income' ? 'text-green-400' : 'text-red-400'}`}>
+                                        {t.type === 'income' ? '+' : '-'}₱{t.amount.toFixed(2)}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                 </div>
+                 {transactionsToShow.length === 0 && <p className="text-center text-text-secondary py-8">No transactions for this account.</p>}
+            </div>
+        </div>
+    );
+};
+
+// --- From components/Projects.tsx ---
+const { useState: useStateProj, useMemo: useMemoProj } = React;
+const CategoryManagerProj = ({ type }) => {
+    const { data, dispatch } = useAppData();
+    const [name, setName] = useStateProj('');
+    const categories = useMemoProj(() => data.categories.filter(c => c.type === type), [data.categories, type]);
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        if(name.trim()) {
+            dispatch({ type: 'ADD_CATEGORY', payload: { name, type }});
+            setName('');
+        }
+    };
+    return (
+        <div className="mb-4">
+            <form onSubmit={handleSubmit} className="flex gap-2 mb-2">
+                <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="New Category Name"
+                    className="flex-grow bg-background border border-gray-600 rounded-md px-3 py-1 text-sm"
+                />
+                <button type="submit" className="bg-primary text-white px-3 py-1 rounded-md text-sm">Add</button>
+            </form>
+            <div className="flex flex-wrap gap-2">
+                {categories.map(cat => (
+                    <div key={cat.id} className="bg-surface px-2 py-1 rounded-full text-xs flex items-center gap-2">
+                        <span>{cat.name}</span>
+                        <button onClick={() => dispatch({type: 'DELETE_CATEGORY', payload: cat.id})} className="hover:text-secondary">
+                            &times;
+                        </button>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+const ProjectModal = ({ project, onClose }) => {
+    const { data, dispatch } = useAppData();
+    const [name, setName] = useStateProj(project?.name || '');
+    const [deadline, setDeadline] = useStateProj(project?.deadline.split('T')[0] || '');
+    const [categoryId, setCategoryId] = useStateProj(project?.categoryId || '');
+    const [clientId, setClientId] = useStateProj(project?.clientId || '');
+    const [value, setValue] = useStateProj(project?.value?.toString() || '');
+    const [notes, setNotes] = useStateProj(project?.notes || '');
+    const projectCategories = useMemoProj(() => data.categories.filter(c => c.type === 'project'), [data.categories]);
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        const projectData = {
+            name,
+            deadline: new Date(deadline).toISOString(),
+            isCompleted: project?.isCompleted || false,
+            categoryId: categoryId || undefined,
+            clientId: clientId || undefined,
+            value: value ? parseFloat(value) : undefined,
+            notes,
+            tasks: project?.tasks || []
+        };
+        if (project) {
+            dispatch({ type: 'UPDATE_PROJECT', payload: { ...project, ...projectData } });
+        } else {
+            dispatch({ type: 'ADD_PROJECT', payload: projectData });
+        }
+        onClose();
+    };
+    return (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+            <form onSubmit={handleSubmit} className="bg-surface p-6 rounded-xl space-y-4 w-full max-w-lg">
+                <h3 className="text-2xl font-bold">{project ? 'Edit Project' : 'New Project'}</h3>
+                <input type="text" placeholder="Project Name" value={name} onChange={e => setName(e.target.value)} required className="w-full bg-background border border-gray-600 rounded-md px-3 py-2" />
+                <input type="date" value={deadline} onChange={e => setDeadline(e.target.value)} required className="w-full bg-background border border-gray-600 rounded-md px-3 py-2" />
+                <input type="number" placeholder="Project Value (₱)" value={value} onChange={e => setValue(e.target.value)} className="w-full bg-background border border-gray-600 rounded-md px-3 py-2" />
+                <select value={categoryId} onChange={e => setCategoryId(e.target.value)} className="w-full bg-background border border-gray-600 rounded-md px-3 py-2">
+                    <option value="">No Category</option>
+                    {projectCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                <select value={clientId} onChange={e => setClientId(e.target.value)} className="w-full bg-background border border-gray-600 rounded-md px-3 py-2">
+                    <option value="">No Client</option>
+                    {data.contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                <textarea placeholder="Project Notes" value={notes} onChange={e => setNotes(e.target.value)} className="w-full bg-background border border-gray-600 rounded-md px-3 py-2 h-24"></textarea>
+                <div className="flex justify-end gap-2">
+                    <button type="button" onClick={onClose} className="px-4 py-2 rounded-md bg-background hover:bg-gray-700">Cancel</button>
+                    <button type="submit" className="px-4 py-2 rounded-md bg-primary text-white font-semibold">Save Project</button>
+                </div>
+            </form>
+        </div>
+    );
+};
+const ProjectDetailView = ({ project, onClose }) => {
+    const { dispatch } = useAppData();
+    const [taskText, setTaskText] = useStateProj('');
+    const [taskDeadline, setTaskDeadline] = useStateProj('');
+    const tasksByStatus = useMemoProj(() => {
+        return project.tasks.reduce((acc, task) => {
+            acc[task.status].push(task);
+            return acc;
+        }, { todo: [], inprogress: [], done: [] });
+    }, [project.tasks]);
+    const handleAddTask = (e) => {
+        e.preventDefault();
+        if(taskText.trim()){
+            dispatch({ type: 'ADD_TASK', payload: { projectId: project.id, task: { text: taskText, status: 'todo', deadline: taskDeadline || undefined } }});
+            setTaskText('');
+            setTaskDeadline('');
+        }
+    }
+    return (
+        <div className="fixed inset-0 bg-background/95 flex flex-col p-4 md:p-8 z-40 overflow-y-auto">
+             <div className="flex justify-between items-center mb-6">
+                <div>
+                    <h2 className="text-3xl font-bold">{project.name}</h2>
+                    <p className="text-text-secondary">Deadline: {new Date(project.deadline).toLocaleDateString()}</p>
+                </div>
+                <button onClick={onClose} className="px-4 py-2 rounded-md bg-surface">Close</button>
+             </div>
+             <form onSubmit={handleAddTask} className="flex gap-2 mb-6 items-end bg-surface p-4 rounded-xl">
+                <input type="text" value={taskText} onChange={e => setTaskText(e.target.value)} placeholder="New task description" required className="flex-grow bg-background border border-gray-600 rounded-md px-3 py-2" />
+                <input type="date" value={taskDeadline} onChange={e => setTaskDeadline(e.target.value)} className="bg-background border border-gray-600 rounded-md px-3 py-2" />
+                <button type="submit" className="bg-primary text-white px-4 py-2 rounded-md font-semibold">Add Task</button>
+             </form>
+            <div className="flex-grow grid grid-cols-1 md:grid-cols-3 gap-6">
+                {(['todo', 'inprogress', 'done']).map(status => (
+                    <div key={status} className="bg-surface rounded-xl p-4 flex flex-col">
+                        <h3 className="font-bold text-lg mb-4 capitalize">{status === 'inprogress' ? 'In Progress' : status}</h3>
+                        <div className="flex-grow">
+                        {tasksByStatus[status].map(task => (
+                            <div key={task.id} className="bg-background p-3 rounded-md mb-2">
+                                <p>{task.text}</p>
+                                {task.deadline && <p className="text-xs text-text-secondary mt-1">Due: {new Date(task.deadline).toLocaleDateString()}</p>}
+                                <div className="text-xs mt-2 flex gap-2">
+                                    {status !== 'todo' && <button onClick={() => dispatch({type: 'UPDATE_TASK_STATUS', payload: {projectId: project.id, taskId: task.id, status: 'todo'}})} className="hover:text-primary">To Do</button>}
+                                    {status !== 'inprogress' && <button onClick={() => dispatch({type: 'UPDATE_TASK_STATUS', payload: {projectId: project.id, taskId: task.id, status: 'inprogress'}})} className="hover:text-primary">In Progress</button>}
+                                    {status !== 'done' && <button onClick={() => dispatch({type: 'UPDATE_TASK_STATUS', payload: {projectId: project.id, taskId: task.id, status: 'done'}})} className="hover:text-primary">Done</button>}
+                                     <button onClick={() => dispatch({type: 'DELETE_TASK', payload: {projectId: project.id, taskId: task.id}})} className="text-secondary ml-auto">Delete</button>
+                                </div>
+                            </div>
+                        ))}
+                        </div>
+                    </div>
+                ))}
+            </div>
+             <div className="mt-6 bg-surface p-4 rounded-xl">
+                <h3 className="font-bold text-lg mb-2">Notes</h3>
+                <p className="whitespace-pre-wrap text-text-secondary">{project.notes || 'No notes for this project.'}</p>
+             </div>
+        </div>
+    );
+};
+const Projects = () => {
+    const { data } = useAppData();
+    const [isModalOpen, setIsModalOpen] = useStateProj(false);
+    const [editingProject, setEditingProject] = useStateProj(undefined);
+    const [selectedCategory, setSelectedCategory] = useStateProj('all');
+    const [activeProject, setActiveProject] = useStateProj(null);
+    const openModal = (project) => {
+        setEditingProject(project);
+        setIsModalOpen(true);
+    };
+    const closeModal = () => {
+        setEditingProject(undefined);
+        setIsModalOpen(false);
+    };
+    const projectCategories = useMemoProj(() => data.categories.filter(c => c.type === 'project'), [data.categories]);
+    const filteredProjects = useMemoProj(() => {
+        if (selectedCategory === 'all') return data.projects;
+        return data.projects.filter(p => p.categoryId === selectedCategory);
+    }, [data.projects, selectedCategory]);
+    if (activeProject) {
+        return <ProjectDetailView project={activeProject} onClose={() => setActiveProject(null)} />
+    }
+    return (
+        <div className="space-y-8">
+            {isModalOpen && <ProjectModal project={editingProject} onClose={closeModal} />}
+            <div className="flex justify-between items-center">
+                <h1 className="text-4xl font-bold">Projects</h1>
+                <button onClick={() => openModal()} className="flex items-center bg-primary text-white px-4 py-2 rounded-md hover:bg-pink-500 font-semibold">
+                    <PlusIcon className="w-5 h-5 mr-2" /> New Project
+                </button>
+            </div>
+            <div className="bg-surface p-6 rounded-xl">
+                 <h3 className="text-xl font-bold mb-4">Categories</h3>
+                 <CategoryManagerProj type="project" />
+                 <hr className="border-gray-600 my-4" />
+                 <select value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)} className="bg-background border border-gray-600 rounded-md px-3 py-2 mb-4">
+                    <option value="all">All Categories</option>
+                    {projectCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                 </select>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredProjects.map(proj => (
+                        <div key={proj.id} className="bg-background p-4 rounded-lg flex flex-col">
+                            <div className="flex justify-between items-start">
+                                <h4 className="font-bold text-lg cursor-pointer" onClick={() => setActiveProject(proj)}>{proj.name}</h4>
+                                <div>
+                                    <button onClick={() => openModal(proj)} className="p-1 text-text-secondary hover:text-primary"><PencilIcon className="w-4 h-4" /></button>
+                                </div>
+                            </div>
+                            <p className="text-sm text-text-secondary">Due: {new Date(proj.deadline).toLocaleDateString()}</p>
+                            <div className="mt-auto pt-4">
+                                <div className="w-full bg-surface rounded-full h-2.5">
+                                    <div className="bg-primary h-2.5 rounded-full" style={{ width: `${(proj.tasks.filter(t=>t.status==='done').length / (proj.tasks.length||1)) * 100}%` }}></div>
+                                </div>
+                                <p className="text-xs text-right mt-1">{proj.tasks.filter(t=>t.status==='done').length}/{proj.tasks.length} tasks done</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- From components/CalendarView.tsx ---
+const { useState: useStateCal, useMemo: useMemoCal } = React;
+const CalendarHeader = ({ currentDate, view, onPrev, onNext, onToday, onViewChange }) => {
+    const formatHeader = () => {
+        switch(view) {
+            case 'month':
+                return currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+            case 'week':
+                const startOfWeek = new Date(currentDate);
+                startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+                const endOfWeek = new Date(startOfWeek);
+                endOfWeek.setDate(endOfWeek.getDate() + 6);
+                return `${startOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+            case 'day':
+                return currentDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        }
+    };
+    return (
+        <div className="flex flex-col md:flex-row justify-between items-center mb-6">
+            <div className="flex items-center space-x-2 mb-4 md:mb-0">
+                <button onClick={onPrev} className="p-2 rounded-md bg-surface">&lt;</button>
+                <button onClick={onToday} className="px-4 py-2 rounded-md bg-surface">Today</button>
+                <button onClick={onNext} className="p-2 rounded-md bg-surface">&gt;</button>
+                 <h2 className="text-xl md:text-2xl font-bold ml-4">{formatHeader()}</h2>
+            </div>
+            <div className="flex space-x-1 bg-surface p-1 rounded-md">
+                {(['month', 'week', 'day']).map(v => (
+                    <button key={v} onClick={() => onViewChange(v)} className={`px-3 py-1 text-sm rounded-md capitalize ${view === v ? 'bg-primary text-white' : ''}`}>
+                        {v}
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+};
+const MonthView = ({ date, events, onDayClick }) => {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+    const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+    const startDate = new Date(monthStart);
+    startDate.setDate(startDate.getDate() - startDate.getDay());
+    const endDate = new Date(monthEnd);
+    endDate.setDate(endDate.getDate() + (6 - endDate.getDay()));
+    const calendarDays = [];
+    let currentDate = new Date(startDate);
+    while (currentDate <= endDate) {
+        calendarDays.push(new Date(currentDate));
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+    const isToday = (d) => d.toDateString() === new Date().toDateString();
+    return (
+        <div className="grid grid-cols-7 gap-px bg-gray-700 border border-gray-700">
+            {days.map(day => <div key={day} className="text-center font-semibold py-2 bg-surface text-sm">{day}</div>)}
+            {calendarDays.map((day, i) => {
+                 const dayEvents = events.filter(e => e.date.toDateString() === day.toDateString());
+                 return (
+                    <div key={i} onClick={() => onDayClick(day)} className={`p-2 h-28 md:h-36 bg-surface overflow-y-auto cursor-pointer ${day.getMonth() !== date.getMonth() ? 'text-text-secondary/50' : ''}`}>
+                        <span className={`flex items-center justify-center w-7 h-7 rounded-full ${isToday(day) ? 'bg-primary text-white' : ''}`}>{day.getDate()}</span>
+                         <div className="mt-1">
+                            {dayEvents.map(e => (
+                                <div key={e.id} className={`text-xs px-1 rounded truncate ${e.type === 'project' ? 'bg-rose-500/50' : 'bg-sky-500/50'}`}>{e.title}</div>
+                            ))}
+                        </div>
+                    </div>
+                 )
+            })}
+        </div>
+    );
+};
+const AgendaView = ({ date, events }) => {
+    const dayEvents = events.filter(e => e.date.toDateString() === date.toDateString());
+    return (
+        <div className="bg-surface p-6 rounded-xl">
+             <h3 className="text-xl font-bold mb-4">Agenda for {date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</h3>
+             {dayEvents.length > 0 ? (
+                 <ul className="space-y-3">
+                    {dayEvents.map(event => (
+                        <li key={event.id} className="flex items-center gap-3 bg-background p-3 rounded-md">
+                            <span className={`w-3 h-3 rounded-full ${event.type === 'project' ? 'bg-rose-500' : 'bg-sky-500'}`}></span>
+                            <div>
+                                <p>{event.title}</p>
+                                <p className="text-xs capitalize text-text-secondary">{event.type} Deadline</p>
+                            </div>
+                        </li>
+                    ))}
+                 </ul>
+             ) : (
+                <p className="text-text-secondary">No deadlines or events scheduled for this day.</p>
+             )}
+        </div>
+    );
+};
+const CalendarView = () => {
+    const { data } = useAppData();
+    const [currentDate, setCurrentDate] = useStateCal(new Date());
+    const [view, setView] = useStateCal('month');
+    const events = useMemoCal(() => {
+        const projectEvents = data.projects
+            .filter(p => !p.isCompleted)
+            .map(p => ({
+                id: p.id,
+                title: p.name,
+                date: new Date(p.deadline),
+                type: 'project',
+                fullDay: true
+            }));
+        const taskEvents = data.projects.flatMap(p =>
+            p.tasks
+                .filter(t => t.deadline && t.status !== 'done')
+                .map(t => ({
+                    id: t.id,
+                    title: t.text,
+                    date: new Date(t.deadline),
+                    type: 'task',
+                    fullDay: true
+                }))
+        );
+        return [...projectEvents, ...taskEvents];
+    }, [data.projects]);
+    const handlePrev = () => {
+        const newDate = new Date(currentDate);
+        if (view === 'month') newDate.setMonth(newDate.getMonth() - 1);
+        if (view === 'week') newDate.setDate(newDate.getDate() - 7);
+        if (view === 'day') newDate.setDate(newDate.getDate() - 1);
+        setCurrentDate(newDate);
+    };
+    const handleNext = () => {
+        const newDate = new Date(currentDate);
+        if (view === 'month') newDate.setMonth(newDate.getMonth() + 1);
+        if (view === 'week') newDate.setDate(newDate.getDate() + 7);
+        if (view === 'day') newDate.setDate(newDate.getDate() + 1);
+        setCurrentDate(newDate);
+    };
+    const handleToday = () => setCurrentDate(new Date());
+    const handleDayClick = (date) => {
+        setCurrentDate(date);
+        setView('day');
+    };
+    const renderView = () => {
+        switch (view) {
+            case 'month':
+                return <MonthView date={currentDate} events={events} onDayClick={handleDayClick} />;
+            case 'week':
+            case 'day':
+                return <AgendaView date={currentDate} events={events} />;
+            default:
+                return null;
+        }
+    };
+    return (
+        <div className="space-y-8">
+            <h1 className="text-4xl font-bold">Calendar</h1>
+            <div className="bg-surface p-4 md:p-6 rounded-xl">
+                 <CalendarHeader
+                    currentDate={currentDate}
+                    view={view}
+                    onPrev={handlePrev}
+                    onNext={handleNext}
+                    onToday={handleToday}
+                    onViewChange={setView}
+                 />
+                 {renderView()}
+            </div>
+        </div>
+    );
+};
+
+// --- From components/Contacts.tsx ---
+const { useState: useStateContacts, useMemo: useMemoContacts } = React;
+const CategoryManagerContacts = ({ type }) => {
+    const { data, dispatch } = useAppData();
+    const [name, setName] = useStateContacts('');
+    const categories = useMemoContacts(() => data.categories.filter(c => c.type === type), [data.categories, type]);
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        if(name.trim()) {
+            dispatch({ type: 'ADD_CATEGORY', payload: { name, type }});
+            setName('');
+        }
+    };
+    return (
+        <div className="mb-4">
+            <form onSubmit={handleSubmit} className="flex gap-2 mb-2">
+                <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="New Category Name"
+                    className="flex-grow bg-background border border-gray-600 rounded-md px-3 py-1 text-sm"
+                />
+                <button type="submit" className="bg-primary text-white px-3 py-1 rounded-md text-sm">Add</button>
+            </form>
+            <div className="flex flex-wrap gap-2">
+                {categories.map(cat => (
+                    <div key={cat.id} className="bg-surface px-2 py-1 rounded-full text-xs flex items-center gap-2">
+                        <span>{cat.name}</span>
+                        <button onClick={() => dispatch({type: 'DELETE_CATEGORY', payload: cat.id})} className="hover:text-secondary">
+                            &times;
+                        </button>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+const ContactModal = ({ contact, onClose }) => {
+    const { data, dispatch } = useAppData();
+    const [name, setName] = useStateContacts(contact?.name || '');
+    const [email, setEmail] = useStateContacts(contact?.email || '');
+    const [phone, setPhone] = useStateContacts(contact?.phone || '');
+    const [imageUrl, setImageUrl] = useStateContacts(contact?.imageUrl || '');
+    const [categoryId, setCategoryId] = useStateContacts(contact?.categoryId || '');
+    const [notes, setNotes] = useStateContacts(contact?.notes || '');
+    const contactCategories = useMemoContacts(() => data.categories.filter(c => c.type === 'contact'), [data.categories]);
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        const contactData = { name, email, phone, imageUrl, categoryId, notes };
+        if (contact) {
+            dispatch({ type: 'UPDATE_CONTACT', payload: { ...contact, ...contactData } });
+        } else {
+            dispatch({ type: 'ADD_CONTACT', payload: contactData });
+        }
+        onClose();
+    };
+    return (
+         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+            <form onSubmit={handleSubmit} className="bg-surface p-6 rounded-xl space-y-4 w-full max-w-lg">
+                <h3 className="text-2xl font-bold">{contact ? 'Edit Contact' : 'New Contact'}</h3>
+                <input type="text" placeholder="Full Name" value={name} onChange={e => setName(e.target.value)} required className="w-full bg-background border border-gray-600 rounded-md px-3 py-2" />
+                <input type="email" placeholder="Email Address" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-background border border-gray-600 rounded-md px-3 py-2" />
+                <input type="tel" placeholder="Phone Number" value={phone} onChange={e => setPhone(e.target.value)} className="w-full bg-background border border-gray-600 rounded-md px-3 py-2" />
+                <input type="url" placeholder="Image URL" value={imageUrl} onChange={e => setImageUrl(e.target.value)} className="w-full bg-background border border-gray-600 rounded-md px-3 py-2" />
+                <select value={categoryId} onChange={e => setCategoryId(e.target.value)} className="w-full bg-background border border-gray-600 rounded-md px-3 py-2">
+                    <option value="">No Category</option>
+                    {contactCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                <textarea placeholder="Notes" value={notes} onChange={e => setNotes(e.target.value)} className="w-full bg-background border border-gray-600 rounded-md px-3 py-2 h-24"></textarea>
+                <div className="flex justify-end gap-2">
+                    <button type="button" onClick={onClose} className="px-4 py-2 rounded-md bg-background hover:bg-gray-700">Cancel</button>
+                    <button type="submit" className="px-4 py-2 rounded-md bg-primary text-white font-semibold">Save Contact</button>
+                </div>
+            </form>
+        </div>
+    );
+};
+const ContactDetailView = ({ contact, onClose }) => {
+    const { data } = useAppData();
+    const { clientProjects, totalValue } = useMemoContacts(() => {
+        const clientProjects = data.projects.filter(p => p.clientId === contact.id);
+        const totalValue = clientProjects.reduce((sum, p) => sum + (p.value || 0), 0);
+        return { clientProjects, totalValue };
+    }, [data.projects, contact.id]);
+    return (
+        <div className="fixed inset-0 bg-background/95 flex flex-col p-4 md:p-8 z-40 overflow-y-auto">
+            <div className="flex justify-between items-start mb-6">
+                <div className="flex items-center gap-4">
+                    <img src={contact.imageUrl || `https://ui-avatars.com/api/?name=${contact.name}&background=DB2777&color=fff`} alt={contact.name} className="w-24 h-24 rounded-full object-cover border-2 border-primary" />
+                    <div>
+                        <h2 className="text-3xl font-bold">{contact.name}</h2>
+                        <p className="text-text-secondary">{contact.email}</p>
+                        <p className="text-text-secondary">{contact.phone}</p>
+                    </div>
+                </div>
+                <button onClick={onClose} className="px-4 py-2 rounded-md bg-surface">Close</button>
+            </div>
+            <div className="bg-surface p-6 rounded-xl flex-grow">
+                <h3 className="text-xl font-bold mb-4">Client Report</h3>
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div className="bg-background p-4 rounded-lg text-center">
+                        <p className="text-sm text-text-secondary">Associated Projects</p>
+                        <p className="text-2xl font-bold">{clientProjects.length}</p>
+                    </div>
+                     <div className="bg-background p-4 rounded-lg text-center">
+                        <p className="text-sm text-text-secondary">Total Project Value</p>
+                        <p className="text-2xl font-bold">₱{totalValue.toFixed(2)}</p>
+                    </div>
+                </div>
+                 <h4 className="font-semibold mb-2">Projects</h4>
+                 <ul className="space-y-2">
+                    {clientProjects.map(p => (
+                        <li key={p.id} className="bg-background p-3 rounded-md flex justify-between">
+                            <span>{p.name}</span>
+                            <span className="text-sm text-text-secondary">₱{(p.value || 0).toFixed(2)}</span>
+                        </li>
+                    ))}
+                    {clientProjects.length === 0 && <p className="text-sm text-text-secondary">No projects linked to this contact.</p>}
+                 </ul>
+            </div>
+        </div>
+    );
+};
+const Contacts = () => {
+    const { data, dispatch } = useAppData();
+    const [isModalOpen, setIsModalOpen] = useStateContacts(false);
+    const [editingContact, setEditingContact] = useStateContacts(undefined);
+    const [selectedCategory, setSelectedCategory] = useStateContacts('all');
+    const [activeContact, setActiveContact] = useStateContacts(null);
+    const openModal = (contact) => {
+        setEditingContact(contact);
+        setIsModalOpen(true);
+    };
+    const closeModal = () => {
+        setEditingContact(undefined);
+        setIsModalOpen(false);
+    };
+    const contactCategories = useMemoContacts(() => data.categories.filter(c => c.type === 'contact'), [data.categories]);
+    const filteredContacts = useMemoContacts(() => {
+        if (selectedCategory === 'all') return data.contacts;
+        return data.contacts.filter(c => c.categoryId === selectedCategory);
+    }, [data.contacts, selectedCategory]);
+    if (activeContact) {
+        return <ContactDetailView contact={activeContact} onClose={() => setActiveContact(null)} />;
+    }
+    return (
+        <div className="space-y-8">
+            {isModalOpen && <ContactModal contact={editingContact} onClose={closeModal} />}
+            <div className="flex justify-between items-center">
+                <h1 className="text-4xl font-bold">Contacts</h1>
+                <button onClick={() => openModal()} className="flex items-center bg-primary text-white px-4 py-2 rounded-md hover:bg-pink-500 font-semibold">
+                    <PlusIcon className="w-5 h-5 mr-2" /> New Contact
+                </button>
+            </div>
+            <div className="bg-surface p-6 rounded-xl">
+                 <h3 className="text-xl font-bold mb-4">Categories</h3>
+                 <CategoryManagerContacts type="contact" />
+                 <hr className="border-gray-600 my-4" />
+                 <select value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)} className="bg-background border border-gray-600 rounded-md px-3 py-2 mb-4">
+                    <option value="all">All Categories</option>
+                    {contactCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                 </select>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {filteredContacts.map(contact => (
+                        <div key={contact.id} className="bg-background p-4 rounded-lg text-center">
+                            <img
+                                src={contact.imageUrl || `https://ui-avatars.com/api/?name=${contact.name.replace(/\s/g, '+')}&background=1F2937&color=F9FAFB`}
+                                alt={contact.name}
+                                className="w-24 h-24 rounded-full object-cover mx-auto mb-4 border-2 border-surface"
+                                onClick={() => setActiveContact(contact)}
+                            />
+                            <h4 className="font-bold cursor-pointer" onClick={() => setActiveContact(contact)}>{contact.name}</h4>
+                            <p className="text-sm text-text-secondary">{contact.email}</p>
+                            <div className="mt-4 flex justify-center gap-2">
+                                <button onClick={() => openModal(contact)} className="p-2 text-text-secondary hover:text-primary"><PencilIcon className="w-4 h-4"/></button>
+                                <button onClick={() => dispatch({type: 'DELETE_CONTACT', payload: contact.id})} className="p-2 text-text-secondary hover:text-secondary"><TrashIcon className="w-4 h-4"/></button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- From components/Wellbeing.tsx ---
+const { useState: useStateWell, useEffect: useEffectWell } = React;
+const moodOptions = [
+    { mood: 'happy', emoji: '😊', color: 'text-yellow-400' },
+    { mood: 'excited', emoji: '🤩', color: 'text-orange-400' },
+    { mood: 'neutral', emoji: '😐', color: 'text-gray-400' },
+    { mood: 'sad', emoji: '😢', color: 'text-blue-400' },
+    { mood: 'anxious', emoji: '😟', color: 'text-purple-400' },
+];
+const MoodTracker = () => {
+    const { addMoodLog, data } = useAppData();
+    const [selectedMood, setSelectedMood] = useStateWell(null);
+    const [notes, setNotes] = useStateWell('');
+    const handleSubmit = () => {
+        if(selectedMood) {
+            addMoodLog({ mood: selectedMood, notes, date: new Date().toISOString() });
+            setSelectedMood(null);
+            setNotes('');
+            alert('Mood logged successfully!');
+        }
+    };
+    const todayLog = data.moodLogs.find(log => new Date(log.date).toDateString() === new Date().toDateString());
+    return (
+        <div className="bg-surface p-6 rounded-xl">
+            <h3 className="text-xl font-bold mb-4">How are you feeling today?</h3>
+            {todayLog ? (
+                <div className="text-center">
+                    <p>You've already logged your mood today:</p>
+                    <p className={`text-4xl my-2 ${moodOptions.find(m => m.mood === todayLog.mood)?.color}`}>{moodOptions.find(m => m.mood === todayLog.mood)?.emoji}</p>
+                    <p className="italic text-text-secondary">"{todayLog.notes}"</p>
+                </div>
+            ) : (
+                <div className="space-y-4">
+                    <div className="flex justify-around">
+                        {moodOptions.map(({ mood, emoji, color }) => (
+                            <button key={mood} onClick={() => setSelectedMood(mood)} className={`text-4xl p-2 rounded-full transition-transform transform hover:scale-125 ${selectedMood === mood ? 'bg-primary/20 scale-125' : ''}`}>
+                                {emoji}
+                            </button>
+                        ))}
+                    </div>
+                    {selectedMood && (
+                        <>
+                            <textarea
+                                value={notes}
+                                onChange={(e) => setNotes(e.target.value)}
+                                placeholder="Any thoughts to add?"
+                                className="w-full bg-background border border-gray-600 rounded-md px-3 py-2 h-24"
+                            ></textarea>
+                            <button onClick={handleSubmit} className="w-full bg-primary text-white py-2 rounded-md font-semibold">Log Mood</button>
+                        </>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+const InspirationalContentWell = () => {
+    const [content, setContent] = useStateWell('');
+    const [loading, setLoading] = useStateWell(true);
+    useEffectWell(() => {
+        const fetchContent = async () => {
+            setLoading(true);
+            try {
+                const result = await getInspirationalContent('quote');
+                setContent(result);
+            } catch (error) {
+                setContent('Be the reason someone smiles today.');
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchContent();
+    }, []);
+    return (
+        <div className="bg-surface p-6 rounded-xl text-center">
+             <h3 className="text-xl font-bold mb-4">A Moment of Zen</h3>
+             {loading ? <p>Loading...</p> : <p className="text-lg italic text-text-primary">"{content}"</p>}
+        </div>
+    );
+};
+const Wellbeing = () => {
+    return (
+        <div className="space-y-8">
+            <h1 className="text-4xl font-bold">Wellbeing Hub</h1>
+            <MoodTracker />
+            <InspirationalContentWell />
+        </div>
+    );
+};
+
+// --- From components/Journals.tsx ---
+const { useState: useStateJournal } = React;
+const JournalEditor = ({ entry, onDone }) => {
+    const { addJournalEntry, updateJournalEntry } = useAppData();
+    const [title, setTitle] = useStateJournal(entry?.title || '');
+    const [content, setContent] = useStateJournal(entry?.content || '');
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        if (title && content) {
+            if (entry) {
+                updateJournalEntry({ ...entry, title, content });
+            } else {
+                addJournalEntry({ title, content, date: new Date().toISOString() });
+            }
+            onDone();
+        }
+    };
+    return (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+            <form onSubmit={handleSubmit} className="bg-surface p-6 rounded-xl space-y-4 w-full max-w-2xl">
+                 <h3 className="text-2xl font-bold">{entry ? 'Edit Entry' : 'New Journal Entry'}</h3>
+                <input type="text" placeholder="Title" value={title} onChange={e => setTitle(e.target.value)} required className="w-full bg-background border border-gray-600 rounded-md px-3 py-2" />
+                <textarea placeholder="Write your thoughts..." value={content} onChange={e => setContent(e.target.value)} required className="w-full bg-background border border-gray-600 rounded-md px-3 py-2 h-64"></textarea>
+                <div className="flex justify-end space-x-2">
+                    <button type="button" onClick={onDone} className="px-4 py-2 rounded-md bg-background hover:bg-gray-700">Cancel</button>
+                    <button type="submit" className="flex justify-center items-center bg-primary text-white px-4 py-2 rounded-md hover:bg-pink-500 font-semibold">
+                        {entry ? 'Save Changes' : 'Save Entry'}
+                    </button>
+                </div>
+            </form>
+        </div>
+    );
+};
+const Journals = () => {
+    const { data, deleteJournalEntry } = useAppData();
+    const [editingEntry, setEditingEntry] = useStateJournal(undefined);
+    const [isEditorOpen, setIsEditorOpen] = useStateJournal(false);
+    const sortedEntries = [...data.journalEntries].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const openEditor = (entry) => {
+        setEditingEntry(entry);
+        setIsEditorOpen(true);
+    };
+    const closeEditor = () => {
+        setEditingEntry(undefined);
+        setIsEditorOpen(false);
+    };
+    return (
+        <div className="space-y-8">
+            <div className="flex justify-between items-center">
+                 <h1 className="text-4xl font-bold">My Journal</h1>
+                 <button onClick={() => openEditor()} className="flex items-center bg-primary text-white px-4 py-2 rounded-md hover:bg-pink-500 transition-colors font-semibold">
+                     <PlusIcon className="w-5 h-5 mr-2" /> New Entry
+                 </button>
+            </div>
+            {isEditorOpen && <JournalEditor entry={editingEntry} onDone={closeEditor} />}
+            <div className="space-y-4">
+                {sortedEntries.map(entry => (
+                    <div key={entry.id} className="bg-surface p-6 rounded-xl">
+                        <div className="flex justify-between items-start">
+                             <div>
+                                <h3 className="text-xl font-bold">{entry.title}</h3>
+                                <p className="text-sm text-text-secondary mb-2">{new Date(entry.date).toLocaleString()}</p>
+                                <p className="whitespace-pre-wrap line-clamp-3">{entry.content}</p>
+                            </div>
+                            <div className="flex space-x-2 flex-shrink-0 ml-4">
+                                <button onClick={() => openEditor(entry)} className="text-sm px-3 py-1 bg-background rounded-md">Edit</button>
+                                <button onClick={() => deleteJournalEntry(entry.id)} className="text-text-secondary hover:text-secondary p-1"><TrashIcon className="w-5 h-5"/></button>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+                {sortedEntries.length === 0 && (
+                    <p className="text-center text-text-secondary py-16">Your journal is a blank canvas. Start writing!</p>
+                )}
+            </div>
+        </div>
+    );
+};
+
+// --- From App.tsx ---
+const { useState: useStateApp } = React;
+const App = () => {
+    const [currentView, setCurrentView] = useStateApp('dashboard');
+    const renderView = () => {
+        switch (currentView) {
+            case 'dashboard': return <Dashboard />;
+            case 'budget': return <Budget />;
+            case 'projects': return <Projects />;
+            case 'calendar': return <CalendarView />;
+            case 'contacts': return <Contacts />;
+            case 'wellbeing': return <Wellbeing />;
+            case 'journals': return <Journals />;
+            default: return <Dashboard />;
+        }
+    };
+    return (
+        <AppDataProvider>
+            <div className="flex h-screen bg-background text-text-primary font-sans">
+                <Sidebar currentView={currentView} setCurrentView={setCurrentView} />
+                <main className="flex-1 p-4 md:p-8 overflow-y-auto">
+                    {renderView()}
+                </main>
+            </div>
+        </AppDataProvider>
+    );
+};
+
+// --- From index.tsx ---
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+
+const rootElement = document.getElementById('root');
+if (!rootElement) {
+  throw new Error("Could not find root element to mount to");
+}
+
+const root = ReactDOM.createRoot(rootElement);
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+    </script>
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
