@@ -330,6 +330,11 @@ const PencilIcon = (props) => (
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z" />
     </svg>
 );
+const ChevronRightIcon = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+    </svg>
+);
 
 // --- From components/Sidebar.tsx ---
 const { useRef } = React;
@@ -392,7 +397,7 @@ const Sidebar = ({ currentView, setCurrentView }) => {
 const { useState, useEffect: useEffectDash, useMemo: useMemoDash } = React;
 const InspirationalContent = () => {
     const [content, setContent] = useState('');
-    const [type, setType] = useState('quote');
+    const [type, setType] = useState('verse');
     const [loading, setLoading] = useState(true);
 
     const fetchContent = async (contentType) => {
@@ -802,7 +807,7 @@ const ProjectDetailView = ({ project, onClose }) => {
         }
     }
     return (
-        <div className="fixed inset-0 bg-background/95 flex flex-col p-4 md:p-8 z-40 overflow-y-auto">
+        <div className="fixed inset-0 md:left-64 bg-background/95 flex flex-col p-4 md:p-8 z-40 overflow-y-auto">
              <div className="flex justify-between items-center mb-6">
                 <div>
                     <h2 className="text-3xl font-bold">{project.name}</h2>
@@ -886,12 +891,18 @@ const Projects = () => {
                     {filteredProjects.map(proj => (
                         <div key={proj.id} className="bg-background p-4 rounded-lg flex flex-col">
                             <div className="flex justify-between items-start">
-                                <h4 className="font-bold text-lg cursor-pointer" onClick={() => setActiveProject(proj)}>{proj.name}</h4>
+                                <h4 className="font-bold text-lg">{proj.name}</h4>
                                 <div>
                                     <button onClick={() => openModal(proj)} className="p-1 text-text-secondary hover:text-primary"><PencilIcon className="w-4 h-4" /></button>
                                 </div>
                             </div>
-                            <p className="text-sm text-text-secondary">Due: {new Date(proj.deadline).toLocaleDateString()}</p>
+                            <p className="text-sm text-text-secondary mb-3">Due: {new Date(proj.deadline).toLocaleDateString()}</p>
+                            <button 
+                                onClick={() => setActiveProject(proj)} 
+                                className="w-full flex items-center justify-center text-center py-2 px-4 bg-surface hover:bg-gray-700 rounded-md transition-colors text-sm font-semibold">
+                                Manage Tasks
+                                <ChevronRightIcon className="w-4 h-4 ml-1" />
+                            </button>
                             <div className="mt-auto pt-4">
                                 <div className="w-full bg-surface rounded-full h-2.5">
                                     <div className="bg-primary h-2.5 rounded-full" style={{ width: `${(proj.tasks.filter(t=>t.status==='done').length / (proj.tasks.length||1)) * 100}%` }}></div>
